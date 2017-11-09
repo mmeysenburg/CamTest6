@@ -3,6 +3,7 @@ package ist.doane.edu.camtest6;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -13,6 +14,7 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.media.ImageReader;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
@@ -21,6 +23,7 @@ import android.os.Bundle;
 import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
 import android.widget.Toast;
 
 import java.util.Arrays;
@@ -39,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private Surface mPreviewSurface;
     private Surface mJpegCaptureSurface;
     private CameraCaptureSession mSession;
+    private TotalCaptureResult mCaptureResult;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,6 +51,25 @@ public class MainActivity extends AppCompatActivity {
 
         // set up the camera and start the preview
         setupCamera();
+    }
+
+    public void onClick(View view) {
+        try {
+            CaptureRequest.Builder request =
+                    mCamera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            request.addTarget(mJpegCaptureSurface);
+
+            mSession.capture(request.build(), new CameraCaptureSession.CaptureCallback() {
+                @Override
+                public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
+                    super.onCaptureCompleted(session, request, result);
+                    mCaptureResult = result;
+                }
+            }, null);
+        } catch (CameraAccessException e) {
+            Toast.makeText(MainActivity.this,
+                    "Can't access camera in onClick()", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void setupCamera() {
@@ -79,8 +102,8 @@ public class MainActivity extends AppCompatActivity {
 
                 Size[] jpegSizes = streamConfigurationMap.getOutputSizes(ImageFormat.JPEG);
 
-                mImageReader = ImageReader.newInstance(jpegSizes[0].getWidth(),
-                        jpegSizes[0].getHeight(), ImageFormat.JPEG, 1);
+                mImageReader = ImageReader.newInstance(jpegSizes[0].getWidth(), jpegSizes[0].getHeight(),
+                        ImageFormat.JPEG, 1);
                 mImageReader.setOnImageAvailableListener(new ReaderHandler(), null);
 
                 mPreviewSurface = new Surface(mPreviewSurfaceTexture);
@@ -102,11 +125,22 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            return false;
+
+            // if the drawing surface is going away, release the camera
+            if(mCamera != null) {
+                mCamera.close();
+                mCamera = null;
+            }
+            return true;
         }
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+            // if the size of the drawing surface is changing, release the camera
+            if(mCamera != null) {
+                mCamera.close();
+                mCamera = null;
+            }
 
         }
 
@@ -119,6 +153,9 @@ public class MainActivity extends AppCompatActivity {
     private class ReaderHandler implements ImageReader.OnImageAvailableListener {
         public void onImageAvailable(ImageReader reader) {
             // save -- or something? -- the JPEG
+            Image img = reader.acquireLatestImage();
+
+            img.close();
         }
 
     }
@@ -133,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
         public void onOpened(CameraDevice camera) {
             mCamera = camera;
 
-            List<Surface> surfaces = Arrays.asList(mPreviewSurface/*, mJpegCaptureSurface*/);
+            List<Surface> surfaces = Arrays.asList(mPreviewSurface, mJpegCaptureSurface);
             try {
                 mCamera.createCaptureSession(surfaces, new CamCap(), null);
             } catch(CameraAccessException e) {
