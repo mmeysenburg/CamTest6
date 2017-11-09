@@ -155,6 +155,16 @@ public class MainActivity extends AppCompatActivity {
             // save -- or something? -- the JPEG
             Image img = reader.acquireLatestImage();
 
+            int id = img.getFormat();
+            String m = "";
+            if(id == ImageFormat.JPEG) {
+                m = "JPEG ";
+            } else {
+                m = Integer.toString(id) + " ";
+            }
+            m += img.getWidth() + " x " + img.getHeight();
+            Toast.makeText(MainActivity.this, m, Toast.LENGTH_LONG).show();
+
             img.close();
         }
 
